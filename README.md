@@ -10,6 +10,9 @@ with no human touching its keys. Vineyard spawns instances, hands each one its o
 lets it earn across four on-chain engines — Polymarket, yield (Aave/Beefy/Fluid), Hyperliquid, and
 Solana — with no human and no chat session in the loop after the one-time seed.
 
+**Live dashboard**: [vineyard-dashboard-production.up.railway.app](https://vineyard-dashboard-production.up.railway.app)
+— every spawned instance's wallets and real realized P&L, updated from the actual host state.
+
 ## Quickstart
 
 ```bash
