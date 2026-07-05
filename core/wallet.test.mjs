@@ -83,3 +83,72 @@ test('generateWallet: overrideKeys is IGNORED once wallet.json/solana.json alrea
   assert.equal(attemptedSwap.evm.address, first.evm.address, 're-spawn must ignore overrideKeys.evmPrivateKey once identity already exists');
   assert.equal(attemptedSwap.solana.address, first.solana.address, 're-spawn must ignore overrideKeys.solanaSecretKey once identity already exists');
 });
+
+// --- Task 3: fail-closed key isolation (adversary-grade) ---
+
+import { resolveEvmPrivateKey, resolveSolanaSecret } from './wallet.mjs';
+
+test('FAIL-CLOSED: instance B has no wallet yet -> resolveEvmPrivateKey(B) is null, never throws, never falls back to A', () => {
+  const home = tmpHome('vy-isolate-evm');
+  const env = { VINEYARD_HOME: home };
+  const a = generateWallet('instance-a', env); // only A is spawned
+  assert.notEqual(a.evm.address, null);
+  assert.doesNotThrow(() => {
+    const keyForB = resolveEvmPrivateKey('instance-b', env);
+    assert.equal(keyForB, null, 'instance B must never resolve a key it has not been given');
+  });
+});
+
+test('FAIL-CLOSED: instance B has no wallet yet -> resolveSolanaSecret(B) is null, never throws, never falls back to A', () => {
+  const home = tmpHome('vy-isolate-sol');
+  const env = { VINEYARD_HOME: home };
+  generateWallet('instance-a', env);
+  assert.doesNotThrow(() => {
+    assert.equal(resolveSolanaSecret('instance-b', env), null);
+  });
+});
+
+test('ISOLATION: A and B both spawned -> resolveEvmPrivateKey(A) never equals resolveEvmPrivateKey(B), and each resolves ONLY its own key', () => {
+  const home = tmpHome('vy-isolate-both');
+  const env = { VINEYARD_HOME: home };
+  const a = generateWallet('instance-a', env);
+  const b = generateWallet('instance-b', env);
+  const keyA = resolveEvmPrivateKey('instance-a', env);
+  const keyB = resolveEvmPrivateKey('instance-b', env);
+  assert.notEqual(keyA, keyB);
+  assert.equal(privateKeyToAccountAddress(keyA), a.evm.address);
+  assert.equal(privateKeyToAccountAddress(keyB), b.evm.address);
+});
+
+test('REGRESSION: setting env.VINEYARD_EVM_PRIVATE_KEY on the process has ZERO effect on resolveEvmPrivateKey for ANY id (the ambient-override footgun is structurally gone, not just removed by convention)', () => {
+  const home = tmpHome('vy-isolate-noambient-evm');
+  const envClean = { VINEYARD_HOME: home };
+  const a = generateWallet('instance-a', envClean);
+  const keyWithoutAmbient = resolveEvmPrivateKey('instance-a', envClean);
+  const envWithAmbient = {
+    VINEYARD_HOME: home,
+    VINEYARD_EVM_PRIVATE_KEY: '0xdeadbeef00000000000000000000000000000000000000000000000000000001',
+  };
+  const keyWithAmbient = resolveEvmPrivateKey('instance-a', envWithAmbient);
+  assert.equal(keyWithAmbient, keyWithoutAmbient, 'an ambient env var must never change the resolved key for an EXISTING id');
+  assert.equal(privateKeyToAccountAddress(keyWithAmbient), a.evm.address);
+  // and for an id that was never spawned — the ambient var must not "fill in" a key either
+  assert.equal(resolveEvmPrivateKey('instance-never-spawned', envWithAmbient), null);
+});
+
+test('REGRESSION: setting env.VINEYARD_SOLANA_PRIVATE_KEY on the process has ZERO effect on resolveSolanaSecret for ANY id', () => {
+  const home = tmpHome('vy-isolate-noambient-sol');
+  const envClean = { VINEYARD_HOME: home };
+  generateWallet('instance-a', envClean);
+  const secretWithoutAmbient = resolveSolanaSecret('instance-a', envClean);
+  const envWithAmbient = { VINEYARD_HOME: home, VINEYARD_SOLANA_PRIVATE_KEY: 'fakeAmbientSolanaSecretThatMustNeverBeReturned' };
+  const secretWithAmbient = resolveSolanaSecret('instance-a', envWithAmbient);
+  assert.equal(secretWithAmbient, secretWithoutAmbient, 'an ambient env var must never change the resolved secret for an EXISTING id');
+  assert.equal(resolveSolanaSecret('instance-never-spawned', envWithAmbient), null);
+});
+
+function privateKeyToAccountAddress(pk) {
+  // local re-derivation via viem, independent of wallet.mjs's own generation path, so this test does
+  // not just trust wallet.mjs's own bookkeeping.
+  return privateKeyToAccount(pk).address;
+}
