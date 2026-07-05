@@ -177,7 +177,11 @@ export async function run({ evmPrivateKey, costBasisFile, env = process.env } = 
   }
 
   // ---- HOLD: buffer is healthy, surplus too small to deploy. Positions keep accruing. ----
-  out({ kind: "yield_hold", action: "hold", liquid_usdc: Number(liquid) / 1e6, reserve_usdc: RESERVE / 1e6, note: "buffer healthy" });
+  // Found via a real end-to-end run (2026-07-05, a freshly-seeded $0.30 instance hitting this exact
+  // branch): missing `return` meant this fell through and returned `undefined`, crashing
+  // core/loop.mjs's normalizeResult() at `result.status` — every other branch in this file already
+  // returns `out(...)`; this one didn't.
+  return out({ kind: "yield_hold", action: "hold", liquid_usdc: Number(liquid) / 1e6, reserve_usdc: RESERVE / 1e6, note: "buffer healthy" });
 }
 
 import { fileURLToPath } from 'node:url';
