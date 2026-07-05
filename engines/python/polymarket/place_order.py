@@ -1,0 +1,231 @@
+#!/usr/bin/env python3
+"""
+place_order.py — EXECUTION: generalized V2 FAK order placement (#25 spec §2.2).
+
+Copied from the real, currently-live anicca skill (`~/anicca/skills/earn/polymarket-trade/
+place_order.py`, verified 2026-07-05) — NOT re-derived from `v2_full_flow.py` per this plan's
+original D1 text: that file has since been DELETED upstream (anicca's own #25 adversary fix #2,
+same day) and superseded by this already-parameterized, already-adversary-hardened script (SIWE mint
+-> SecureClient bootstrap -> approve neg-risk spenders -> get_order_book -> create_market_order FAK
+-> post_order), including the CLEAN-STDOUT GUARANTEE fix below (a real production bug: the SDK's own
+stdout prints were merging onto the result line and breaking the caller's json.loads()). Reusing this
+verified, already-fixed version rather than re-introducing that known bug is the "make sure it
+actually works" call per HARD RULE 0.24/HONESTY RULES — see this repo's plan-deviation note in the
+Task 9 commit message.
+
+ONE deliberate edit vs the anicca original: the `PM_TRADE_AGENT_HOME`/`load_dotenv(...)` block that
+loaded a hardcoded, anicca-specific `.env` path is removed — Vineyard's wrapper
+(`engines/polymarket.mjs`) always injects `POLYGON_WALLET_PRIVATE_KEY`/`TOKEN_ID`/`SIDE`/`AMOUNT`/
+`MAX_BET_SIZE` directly into this process's own env (per-instance, from `core/wallet.mjs`), so there is
+no separate dotenv file to load — the same principle as D6(b)'s edit to `redeem.py`. Every other line
+(SIWE mint, approvals, order-book read, FAK order placement, the stdout-redirect mechanism) is
+byte-identical to the anicca original.
+
+WHICH market/side/amount is entirely the caller's (Vineyard operator's / `vineyard trade`'s) decision —
+this file only executes it and enforces the money-safety cap.
+
+Inputs (env preferred, positional argv fallback):
+  TOKEN_ID   CLOB token id to BUY                              (argv[1])
+  SIDE       must be "BUY" — this flow only supports BUY;
+             SELL needs shares already held, out of scope here (argv[2])
+  AMOUNT     USD spend amount                                  (argv[3])
+  POLYGON_WALLET_PRIVATE_KEY  this instance's signer key (injected by
+                              engines/polymarket.mjs from core/wallet.mjs)
+  MAX_BET_SIZE (default 2)   hard cap on AMOUNT (money-safety, not judgment)
+
+Output: exactly one line of JSON on the REAL stdout (guaranteed clean — see below):
+  {"token_id","amount","order_id","post_result","ok"}
+On any failure before an order can be attempted: {"ok": false, "error": "..."}
+(exit code 1). Never places a fake/simulated order — no dry-run path exists.
+
+CLEAN-STDOUT GUARANTEE (#25 adversary fix, accounting integrity, 2026-07-05):
+a real Franklin fill ("Will Jesus Christ return before GTA VI?", NO, ~$1,
+CONFIRMED filled on-chain) was mis-logged ok:false by run.sh because the
+polymarket SDK (imported inside main(), during mint/credential-bootstrap)
+printed to stdout and merged onto the SAME line as the result JSON, breaking
+run.sh's json.loads(). Fix: `sys.stdout` at process start is captured as
+`_REAL_STDOUT` before anything runs; ALL work (SDK import, SIWE mint,
+approve, order book, order placement) runs under
+`contextlib.redirect_stdout(sys.stderr)`, so any stray SDK/library print
+lands on stderr. The ONLY thing ever written to `_REAL_STDOUT` is the single
+final `_emit(...)` call — stdout is guaranteed to be exactly one clean JSON
+line, so a real fill is never again mis-recorded as a parse failure.
+"""
+import os
+import sys
+import json
+import base64
+import datetime
+import contextlib
+import requests
+from eth_account import Account
+from eth_account.messages import encode_defunct
+
+_REAL_STDOUT = sys.stdout  # capture BEFORE any import/work that might print
+
+
+def _emit(obj):
+    """The ONLY function allowed to write to the real, captured stdout."""
+    print(json.dumps(obj), file=_REAL_STDOUT, flush=True)
+
+
+PUSD = "0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB"
+NEG_EXCH = "0xe2222d279d744050d28e00520010520000310F59"
+NEG_ADAPTER = "0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296"
+DEFAULT_MAX_BET_SIZE = 2.0
+SLIPPAGE = 0.03
+
+
+def _arg(i):
+    return sys.argv[i] if len(sys.argv) > i else None
+
+
+def fail(reason):
+    """Uses _emit (real stdout) so it's clean even when called from inside
+    the redirect_stdout(sys.stderr) block in main()."""
+    _emit({"ok": False, "error": reason})
+    sys.exit(1)
+
+
+def mint_relayer_key(acct):
+    """SIWE (no browser) -> gamma-api/login -> relayer-v2/relayer/api/auth
+    -> apiKey. Same recipe as fund_via_bridge.py's mint_relayer_key()."""
+    s = requests.Session()
+    s.headers.update({
+        "User-Agent": "Mozilla/5.0",
+        "Origin": "https://polymarket.com",
+        "Referer": "https://polymarket.com/",
+    })
+    nonce = s.get("https://gamma-api.polymarket.com/nonce", timeout=20).json()["nonce"]
+    now = datetime.datetime.now(datetime.timezone.utc)
+    iss = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+    fields = {
+        "domain": "polymarket.com",
+        "address": acct.address,
+        "statement": "Welcome to Polymarket! Sign to connect.",
+        "uri": "https://polymarket.com",
+        "version": "1",
+        "chainId": 137,
+        "nonce": nonce,
+        "issuedAt": iss,
+    }
+    plaintext = (
+        f"polymarket.com wants you to sign in with your Ethereum account:\n{acct.address}\n\n"
+        f"{fields['statement']}\n\nURI: https://polymarket.com\nVersion: 1\nChain ID: 137\n"
+        f"Nonce: {nonce}\nIssued At: {iss}"
+    )
+    sig = "0x" + acct.sign_message(encode_defunct(text=plaintext)).signature.hex()
+    b64 = base64.b64encode((json.dumps(fields, separators=(",", ":")) + ":::" + sig).encode()).decode()
+    s.get("https://gamma-api.polymarket.com/login", headers={"Authorization": "Bearer " + b64}, timeout=20)
+    resp = s.post("https://relayer-v2.polymarket.com/relayer/api/auth", json={}, timeout=20).json()
+    return resp.get("apiKey") or resp.get("api_key")
+
+
+def approve_spenders(client):
+    """Idempotent — fund_via_bridge.py already does this at registration
+    time; re-approving here is safe and covers a freshly-registered wallet
+    whose approvals haven't landed yet."""
+    for spender in (NEG_EXCH, NEG_ADAPTER):
+        balance_allowance = client.get_balance_allowance(asset_type="COLLATERAL")
+        if int(balance_allowance.allowances.get(spender, 0)) < 1:
+            handle = client.approve_erc20(token_address=PUSD, spender_address=spender, amount="max")
+            try:
+                handle.wait()
+            except Exception:
+                pass
+
+
+def best_ask_price(order_book):
+    asks = getattr(order_book, "asks", [])
+    if not asks:
+        return 0.58  # last-resort fallback, matches the original proven-live value
+    return min(float(getattr(a, "price", None) or a["price"]) for a in asks)
+
+
+def _run():
+    """All the actual work. Called ONLY from inside main()'s
+    redirect_stdout(sys.stderr) block, so any print() anywhere in this call
+    graph (the polymarket SDK's import/mint/approve/order-book/post_order
+    machinery) lands on stderr, never merging onto the final result line."""
+    token_id = os.environ.get("TOKEN_ID") or _arg(1)
+    side = (os.environ.get("SIDE") or _arg(2) or "BUY").upper()
+    amount_raw = os.environ.get("AMOUNT") or _arg(3)
+
+    if not token_id:
+        fail("missing TOKEN_ID")
+    if side != "BUY":
+        fail(f"unsupported SIDE:{side} (this flow only executes BUY)")
+    if not amount_raw:
+        fail("missing AMOUNT")
+
+    try:
+        amount = float(amount_raw)
+    except (TypeError, ValueError):
+        fail(f"invalid AMOUNT:{amount_raw}")
+
+    max_bet_size = float(os.environ.get("MAX_BET_SIZE", DEFAULT_MAX_BET_SIZE))
+    if amount > max_bet_size:
+        amount = max_bet_size  # money-safety cap (spec §2.2) — not a judgment call
+
+    key = os.environ.get("POLYGON_WALLET_PRIVATE_KEY")
+    if not key:
+        fail("missing POLYGON_WALLET_PRIVATE_KEY")
+    key = key if key.startswith("0x") else "0x" + key
+
+    from polymarket.clients.secure import SecureClient
+    from polymarket.auth import RelayerApiKey
+
+    acct = Account.from_key(key)
+    bootstrap = SecureClient._create(private_key=key, validate_credentials=True)
+    credentials = bootstrap._ctx.credentials
+    bootstrap.close()
+
+    client = SecureClient.create(
+        private_key=key,
+        credentials=credentials,
+        api_key=RelayerApiKey(key=mint_relayer_key(acct), address=acct.address),
+    )
+
+    try:
+        approve_spenders(client)
+
+        order_book = client.get_order_book(token_id=token_id)
+        ask = best_ask_price(order_book)
+        max_price = str(round(ask + SLIPPAGE, 3))
+
+        signed_order = client.create_market_order(
+            token_id=token_id,
+            side="BUY",
+            amount=str(amount),
+            max_price=max_price,
+            order_type="FAK",
+        )
+        response = client.post_order(signed_order)
+
+        try:
+            post_result = response.model_dump(mode="json")
+        except Exception:
+            post_result = str(response)
+
+        _emit({
+            "token_id": token_id,
+            "amount": amount,
+            "order_id": getattr(response, "order_id", None),
+            "post_result": post_result,
+            "ok": bool(getattr(response, "ok", False)),
+        })
+    finally:
+        client.close()
+
+
+def main():
+    """Entry point. Redirects sys.stdout to stderr for the ENTIRE run
+    (SDK import, mint, approve, order-book, post_order) so stdout stays
+    clean; _emit()/fail() write to _REAL_STDOUT directly, so they're
+    unaffected by the redirect."""
+    with contextlib.redirect_stdout(sys.stderr):
+        _run()
+
+
+if __name__ == "__main__":
+    main()

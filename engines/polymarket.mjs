@@ -41,3 +41,39 @@ export async function fund({ evmPrivateKey, sourceKey, fundUsd = 2, env = proces
   });
   return parseFundOutput(stdout);
 }
+
+/**
+ * place_order.py's stdout is GUARANTEED to be exactly one clean JSON line (its own
+ * contextlib.redirect_stdout(sys.stderr) fix, see the copied script's docstring) — success shape
+ * {token_id,amount,order_id,post_result,ok:true}, clean failure shape {ok:false,error}. execFile
+ * rejects on a non-zero exit (place_order.py exits 1 on fail()), so callers get both the thrown
+ * error AND, where available, this parsed {ok:false,error} object from stdout.
+ */
+export function parseTradeOutput(stdout) {
+  const line = stdout.trim().split('\n').filter((l) => l.trim().startsWith('{')).pop();
+  if (!line) throw new Error('place_order.py produced no output');
+  return JSON.parse(line);
+}
+
+/**
+ * Place a real, parameterized Polymarket CLOB V2 FAK BUY order (spec §2.2 money-safety cap —
+ * `maxBetUsd` is a HARD cap enforced inside place_order.py itself, not re-enforced here — this
+ * wrapper never re-derives or overrides that cap, matching R5's "mechanical dispatch, not judgment").
+ * WHICH tokenId/amountUsd to trade is the caller's decision (spec §4 `vineyard trade`), never picked
+ * here (D2 — Vineyard does not vendor a market-picking agent).
+ */
+export async function trade({ evmPrivateKey, tokenId, side = 'BUY', amountUsd, maxBetUsd, env = process.env }) {
+  const childEnv = {
+    ...env,
+    POLYGON_WALLET_PRIVATE_KEY: evmPrivateKey,
+    TOKEN_ID: String(tokenId),
+    SIDE: side,
+    AMOUNT: String(amountUsd),
+    ...(maxBetUsd != null ? { MAX_BET_SIZE: String(maxBetUsd) } : {}),
+  };
+  const { stdout } = await execFileAsync(pythonBin(), [path.join(PY_DIR, 'place_order.py')], {
+    env: childEnv,
+    timeout: 120_000,
+  });
+  return parseTradeOutput(stdout);
+}

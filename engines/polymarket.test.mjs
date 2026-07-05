@@ -1,7 +1,7 @@
 // ~/vineyard/engines/polymarket.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseFundOutput } from './polymarket.mjs';
+import { parseFundOutput, parseTradeOutput, trade } from './polymarket.mjs';
 
 test('parseFundOutput: already-registered branch (real fixture from fund_via_bridge.py main())', () => {
   const stdout = '[fund_via_bridge] EOA=0xabc deposit=0xdef\n' + JSON.stringify({ deposit_wallet: '0xdef', registered: true, already: true }) + '\n';
@@ -26,4 +26,35 @@ test('parseFundOutput: fresh-registration branch (real fixture shape with bridge
 
 test('parseFundOutput: throws a clear error on empty stdout rather than returning undefined', () => {
   assert.throws(() => parseFundOutput(''), /no output/);
+});
+
+// NOTE (deviation from the plan's original Task 9 fixture): the REAL, currently-live
+// engines/python/polymarket/place_order.py (adapted from anicca's already-adversary-fixed script,
+// v2_full_flow.py having since been deleted upstream — see the file's own docstring) emits
+// {"token_id","amount","order_id","post_result","ok"} — NOT {wallet,side,max_price} as the plan's
+// stale snippet assumed. These fixtures match the real script's actual stdout shape.
+test('parseTradeOutput: real-shape fixture (single compact JSON line from place_order.py, success)', () => {
+  const stdout = JSON.stringify({
+    token_id: '123', amount: 1, order_id: 'abc-123',
+    post_result: { orderID: 'abc-123', success: true }, ok: true,
+  }) + '\n';
+  const parsed = parseTradeOutput(stdout);
+  assert.equal(parsed.token_id, '123');
+  assert.equal(parsed.order_id, 'abc-123');
+  assert.equal(parsed.ok, true);
+});
+
+test('parseTradeOutput: real-shape fixture (clean failure line, {ok:false,error})', () => {
+  const stdout = JSON.stringify({ ok: false, error: 'missing TOKEN_ID' }) + '\n';
+  const parsed = parseTradeOutput(stdout);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.error, 'missing TOKEN_ID');
+});
+
+test('parseTradeOutput: throws on empty stdout', () => {
+  assert.throws(() => parseTradeOutput(''), /no output/);
+});
+
+test('trade: is exported as a callable async function', () => {
+  assert.equal(typeof trade, 'function');
 });
