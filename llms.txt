@@ -1,0 +1,36 @@
+# vineyard
+
+> AI financial-independence CLI — spawn a self-funded AI that owns its own wallet and earns its own
+> money across 4 on-chain engines (Polymarket, yield, Hyperliquid, Solana), with no human and no
+> chat session in the loop after a one-time seed. CLI + REST API + this file are the machine-readable
+> surface — an agent can spawn/fund/run/monitor instances entirely programmatically. No MCP: this
+> CLI/API pair already gives an agent a machine-readable path.
+
+## Commands (CLI and equivalent HTTP verb — identical semantics)
+
+- `vineyard spawn [--fund N] [--engine pm|yield|hl|sol]` / `POST /spawn` — create an instance: its own
+  isolated EVM + Solana wallet, registered in spawns.json. Returns `{id, evm, solana, fund, engine, created}`.
+- `vineyard fund <id> <amount> [--source-key <key>]` / `POST /fund {id, amount, sourceKey}` — register +
+  fund the instance's Polymarket deposit wallet through the bridge onramp. `sourceKey` (env `SOURCE_KEY`)
+  must be an ALREADY-REGISTERED wallet's key for a brand-new deployment's very first registration.
+- `vineyard run <id> [--engine <name>]` / `POST /run {id, engine}` — one pass of the automatic earn loop
+  (rotates among yield/solana/polymarket-redeem unless `--engine` pins one). Returns one ledger line.
+- `vineyard status <id>` / `GET /status/:id/full` — wallet addresses + realized P&L + full ledger.
+- `vineyard list` / `GET /list` — every spawned instance's public metadata (never key material).
+- `vineyard trade <id> --engine <hl|pm> ...` / `POST /trade {id, engine, ...}` — one manual, explicit
+  trade decision (side/size/params supplied by the caller — this CLI/API never picks a side itself).
+- `vineyard redeem <id>` / `POST /redeem {id}` — collect resolved Polymarket winnings.
+
+## Machine-readable references
+
+- Full OpenAPI spec: `/openapi.json` (same host as the REST API).
+- Source: https://github.com/Daisuke134/vineyard-earn (MIT license).
+
+## Notes for an agent driving this repo
+
+- Every `run`/`trade`/`redeem` call is a REAL pass against real on-chain state — there is no dry-run
+  mode. A "skip", "abort", or "wait" result is a valid, honest outcome (e.g. an unfunded wallet, or no
+  trading edge this pass), never fabricated.
+- `spawn` never returns private key material over HTTP or in `list`/`status` — only addresses.
+- The very first `fund` on a brand-new deployment needs `sourceKey` from an already-registered
+  Polymarket wallet (chicken-and-egg bootstrap — see README "First-time setup").

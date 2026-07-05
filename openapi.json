@@ -1,0 +1,66 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "vineyard", "version": "0.1.0", "description": "AI financial-independence CLI/API — spawn+fund+run+monitor self-funded AI instances." },
+  "paths": {
+    "/spawn": {
+      "post": {
+        "summary": "Create a new instance with its own isolated EVM+Solana wallet",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "id": { "type": "string" }, "fund": { "type": "number" }, "engine": { "type": "string" } } } } } },
+        "responses": { "201": { "description": "spawned", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Spawn" } } } } }
+      }
+    },
+    "/fund": {
+      "post": {
+        "summary": "Register + fund the instance's Polymarket deposit wallet via the bridge onramp",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" }, "amount": { "type": "number" }, "sourceKey": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "fund result" } }
+      }
+    },
+    "/run": {
+      "post": {
+        "summary": "One pass of the automatic earn loop",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" }, "engine": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "one ledger line" } }
+      }
+    },
+    "/status/{id}/full": {
+      "get": {
+        "summary": "Wallet addresses + realized P&L + full ledger for one instance",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "status" }, "404": { "description": "unknown id" } }
+      }
+    },
+    "/list": {
+      "get": { "summary": "All spawned instances (public metadata only)", "responses": { "200": { "description": "array of Spawn" } } }
+    },
+    "/trade": {
+      "post": {
+        "summary": "One manual, explicit trade decision (hl or pm engine)",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "required": ["id", "engine"], "properties": { "id": { "type": "string" }, "engine": { "type": "string", "enum": ["hl", "pm"] } } } } } },
+        "responses": { "200": { "description": "trade result" } }
+      }
+    },
+    "/redeem": {
+      "post": {
+        "summary": "Collect resolved Polymarket winnings",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "array of redeemed conditions" } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Spawn": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "evm": { "type": "string" },
+          "solana": { "type": "string" },
+          "fund": { "type": "number" },
+          "engine": { "type": ["string", "null"] },
+          "created": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  }
+}
