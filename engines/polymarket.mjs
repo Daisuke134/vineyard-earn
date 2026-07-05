@@ -77,3 +77,32 @@ export async function trade({ evmPrivateKey, tokenId, side = 'BUY', amountUsd, m
   });
   return parseTradeOutput(stdout);
 }
+
+/** redeem.py prints one compact JSON line PER redeemed condition (zero lines = nothing redeemable). */
+export function parseRedeemOutput(stdout) {
+  return stdout
+    .trim()
+    .split('\n')
+    .filter((l) => l.trim().startsWith('{'))
+    .map((l) => JSON.parse(l));
+}
+
+/**
+ * Collect (redeem) this instance's RESOLVED, redeemable Polymarket positions. `depositWallet` is the
+ * SDK-resolved deposit wallet address for `evmPrivateKey` (spec §8 — never guessed/hardcoded here;
+ * D6(a)). Each returned row's `line` object is the raw {earn_usdc,cost_usdc,...} fact the caller
+ * (core/loop.mjs) hands to core/ledger.mjs::appendLedger() — this wrapper does not write the ledger
+ * itself (D6(d) — redeem.py no longer calls anicca's external record.mjs either).
+ */
+export async function redeem({ evmPrivateKey, depositWallet, relayerCacheFile, env = process.env }) {
+  const { stdout } = await execFileAsync(pythonBin(), [path.join(PY_DIR, 'redeem.py')], {
+    env: {
+      ...env,
+      POLYGON_WALLET_PRIVATE_KEY: evmPrivateKey,
+      POLYMARKET_DEPOSIT_WALLET: depositWallet,
+      ...(relayerCacheFile ? { POLYMARKET_RELAYER_CACHE: relayerCacheFile } : {}),
+    },
+    timeout: 300_000,
+  });
+  return parseRedeemOutput(stdout);
+}

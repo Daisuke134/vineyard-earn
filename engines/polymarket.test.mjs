@@ -1,7 +1,7 @@
 // ~/vineyard/engines/polymarket.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseFundOutput, parseTradeOutput, trade } from './polymarket.mjs';
+import { parseFundOutput, parseTradeOutput, trade, parseRedeemOutput, redeem } from './polymarket.mjs';
 
 test('parseFundOutput: already-registered branch (real fixture from fund_via_bridge.py main())', () => {
   const stdout = '[fund_via_bridge] EOA=0xabc deposit=0xdef\n' + JSON.stringify({ deposit_wallet: '0xdef', registered: true, already: true }) + '\n';
@@ -57,4 +57,29 @@ test('parseTradeOutput: throws on empty stdout', () => {
 
 test('trade: is exported as a callable async function', () => {
   assert.equal(typeof trade, 'function');
+});
+
+test('parseRedeemOutput: real-shape fixture — one compact JSON line per redeemed condition', () => {
+  const stdout = [
+    'found 1 redeemable condition(s):',
+    '  - \'Wimbledon Final\' conditionId=0xc8a0 value=$10.0000 type=standard',
+    'pUSD before: 4.95',
+    'redeeming 0xc8a0 (\'Wimbledon Final\') ...',
+    '  tx=0xdeadbeef status=0x1',
+    'pUSD after: 14.95  (recovered: 10.0)',
+    JSON.stringify({ conditionId: '0xc8a0', title: 'Wimbledon Final', tx_hash: '0xdeadbeef', status: '0x1', line: { earn_usdc: 10, cost_usdc: 3.55 } }),
+  ].join('\n');
+  const rows = parseRedeemOutput(stdout);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].tx_hash, '0xdeadbeef');
+  assert.equal(rows[0].line.earn_usdc, 10);
+});
+
+test('parseRedeemOutput: "nothing to redeem" produces an empty array, not an error', () => {
+  const stdout = 'no redeemable conditions found — nothing to do\n';
+  assert.deepEqual(parseRedeemOutput(stdout), []);
+});
+
+test('redeem: is exported as a callable async function', () => {
+  assert.equal(typeof redeem, 'function');
 });
