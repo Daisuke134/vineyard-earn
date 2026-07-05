@@ -1,0 +1,7 @@
+node_modules/
+engines/python/.venv/
+data/instances/
+data/ledgers/*.jsonl
+data/spawns.json
+.env
+*.log

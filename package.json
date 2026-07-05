@@ -1,0 +1,24 @@
+{
+  "name": "vineyard-earn",
+  "version": "0.1.0",
+  "description": "AI financial-independence CLI — spawn a self-funded AI that earns its own money across 4 on-chain engines (Polymarket, yield, Hyperliquid, Solana), no human/no Claude in the loop after a one-time seed.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "vineyard": "./cli/index.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test core/*.test.mjs engines/*.test.mjs",
+    "api": "node api/server.mjs"
+  },
+  "dependencies": {
+    "viem": "^2.52.2",
+    "express": "^4.18.2"
+  },
+  "optionalDependencies": {
+    "@blockrun/franklin-trading": "^0.2.4"
+  }
+}
