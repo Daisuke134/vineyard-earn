@@ -1,0 +1,6 @@
+requests==2.34.2
+eth-account==0.13.7
+python-dotenv==1.2.2
+web3==7.16.0
+polymarket-client==0.1.0b13
+hyperliquid-python-sdk==0.24.0
