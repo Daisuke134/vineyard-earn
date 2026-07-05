@@ -1,7 +1,7 @@
 // execute-yield.mjs — earn_yield as a self-managing TREASURY: keep a liquid compute buffer so the
 // loop's survival tier stays funded (= frontier model), deploy the surplus into the best safe stable
 // yield, and REFILL the buffer from yield when frontier inference has burned it down. No human, no
-// per-instance babysitting: every Anicca on this repo manages its own liquid-vs-yield balance.
+// per-instance babysitting: every instance spawned by this repo manages its own liquid-vs-yield balance.
 //
 // Why a buffer: compute is paid in USDC via x402 from LIQUID balance, and the loop picks its model
 // by liquid tier (>$1 funded → frontier). If we deploy ALL liquid to yield, the agent starves its
@@ -12,10 +12,10 @@
 //
 // Honest: own-capital accrual (external:false, kind:"yield"); every action is a real on-chain tx.
 //
-// Copied from anicca ~/anicca/skills/earn/execute-yield.mjs, adapted per plan Task 7: key now arrives
-// as a parameter from core/wallet.mjs via core/loop.mjs (no in-file resolveEvmKey() lookup), and
-// cost-basis.mjs's file path is scoped per spawned instance id instead of one shared-HOME file. All
-// RPC list, Aave/Beefy/Fluid addresses/ABIs, deploy/refill/hold branches, and the read-after-write
+// Ported from a proven reference execute-yield.mjs implementation, adapted per plan Task 7: key now
+// arrives as a parameter from core/wallet.mjs via core/loop.mjs (no in-file resolveEvmKey() lookup),
+// and cost-basis.mjs's file path is scoped per spawned instance id instead of one shared-HOME file.
+// All RPC list, Aave/Beefy/Fluid addresses/ABIs, deploy/refill/hold branches, and the read-after-write
 // depositLanded proof are byte-identical to the original.
 import { createPublicClient, createWalletClient, http, fallback } from "viem";
 import { privateKeyToAccount } from "viem/accounts";

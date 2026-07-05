@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """hl.py — thin Hyperliquid perp TOOL (primitives only; NO decision logic).
 
-Per HARD RULE #0: a skill gives the TOOL, never the decision. THIS FILE DECIDES NOTHING — it does not
-pick a direction, a coin, a size, or a strategy. The MODEL (the Anicca running the loop, or Claude)
-reads SKILL.md, looks at `account` + `market`, decides with its own judgment, and calls `open`/`close`
-with the side/size IT chose. Do not add momentum/trend/"what worked" logic here.
+A skill gives the TOOL, never the decision. THIS FILE DECIDES NOTHING — it does not
+pick a direction, a coin, a size, or a strategy. The MODEL (whichever agent is running the loop)
+reads its own instructions, looks at `account` + `market`, decides with its own judgment, and calls
+`open`/`close` with the side/size IT chose. Do not add momentum/trend/"what worked" logic here.
 
 Verified: a real risk-managed ETH long realized +$0.15 on this exact primitive (2026-06-20).
 Works local AND cloud (pure hyperliquid-python-sdk over HTTPS). Funding: the wallet must already have
@@ -51,7 +51,7 @@ def _key():
         except Exception:
             k = None
     if not k:
-        sys.stderr.write("hl-trade: no per-instance EVM key resolvable (env / $ANICCA_HOME / owner-legacy) — refusing to sign\n")
+        sys.stderr.write("hl-trade: no per-instance EVM key resolvable (env / owner-legacy) — refusing to sign\n")
         sys.exit(2)
     return k if k.startswith("0x") else "0x" + k
 

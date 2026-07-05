@@ -1,8 +1,8 @@
-// ~/vineyard/core/wallet.mjs — per-instance key isolation. Ported from anicca's
-// ~/anicca/skills/earn/lib/resolve-identity.mjs (function names/priority-order pattern kept close),
-// with the anicca-specific legacy-shared-wallet back-compat branch intentionally dropped — see this
-// plan's header note on why a fresh repo has no such convention to honor. Fail-closed everywhere:
-// any missing/malformed file returns null, this module never throws.
+// ~/vineyard/core/wallet.mjs — per-instance key isolation. Ported from a proven reference
+// key-resolution implementation (function names/priority-order pattern kept close), with the
+// original's legacy-shared-wallet back-compat branch intentionally dropped — a fresh repo has no
+// such convention to honor. Fail-closed everywhere: any missing/malformed file returns null, this
+// module never throws.
 //
 // KEY ISOLATION (REQ-003): there is NO ambient/global env-var override for key resolution. A
 // persistent process (api/server.mjs) serves MANY instance ids over its lifetime — a global env

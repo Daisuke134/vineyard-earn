@@ -67,22 +67,22 @@ Sources (quoted, no guessing):
     is Polymarket's own tested conversion path; the real payout currency is
     confirmed empirically after the tx (pUSD balance check), not assumed here.
 
-Ledger (VINEYARD ADAPTATION — discrepancy D6(d)): the upstream anicca version of this file appended
-results via the CANONICAL earn-ledger writer (`~/anicca/skills/earn/lib/record.mjs`). Vineyard does
-not vendor that file (out of scope, spec §8 — `core/ledger.mjs` on the Node side is the sole ledger
-writer here); this script still derives + prints the {earn,cost,tx,status} facts per redeemed
-condition (unchanged), and `engines/polymarket.mjs`'s `redeem()` wrapper hands each printed line to
+Ledger (VINEYARD ADAPTATION — discrepancy D6(d)): a prior reference version of this file appended
+results via an external CANONICAL earn-ledger writer script. Vineyard does not vendor that file
+(out of scope, spec §8 — `core/ledger.mjs` on the Node side is the sole ledger writer here); this
+script still derives + prints the {earn,cost,tx,status} facts per redeemed condition (unchanged), and
+`engines/polymarket.mjs`'s `redeem()` wrapper hands each printed line to
 `core/ledger.mjs::appendLedger()` instead.
 
 VINEYARD ADAPTATIONS (D6, applied 2026-07-05 — 4 documented edits + 1 additional dependency fix found
 while reading this file's actual imports, not in the plan's original D6 text):
   (a) DEPOSIT_WALLET now reads os.environ["POLYMARKET_DEPOSIT_WALLET"] instead of a hardcoded address;
-      AGENT_ENV/LEDGER_RECORD_JS constants removed (no anicca-specific paths).
+      the AGENT_ENV/LEDGER_RECORD_JS constants (hardcoded external paths) are removed.
   (b) build_client() no longer calls load_dotenv(AGENT_ENV) — the Node wrapper
       (engines/polymarket.mjs) already injects POLYGON_WALLET_PRIVATE_KEY into this process's own env.
   (c) _mint_relayer_api_key()'s relayer-key cache path is now
       os.environ.get("POLYMARKET_RELAYER_CACHE", "~/.vineyard/.pm-relayer-apikey") instead of a
-      hardcoded ~/.anicca-founder path.
+      hardcoded external path.
   (d) record_ledger_line() and its call site are removed (see the ledger note above); main()'s
       per-condition result dict carries the raw `line` object instead of a `profitable` bool.
   (e) NOT in the plan's D6 text — found by actually reading this file's real imports: the original

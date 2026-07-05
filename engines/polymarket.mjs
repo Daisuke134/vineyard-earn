@@ -1,8 +1,8 @@
-// ~/vineyard/engines/polymarket.mjs — thin Node wrapper shelling out to the copied, byte-for-byte
-// anicca Polymarket Python scripts (engines/python/polymarket/). None of the money-safety logic
+// ~/vineyard/engines/polymarket.mjs — thin Node wrapper shelling out to the vendored, proven
+// Polymarket Python scripts (engines/python/polymarket/). None of the money-safety logic
 // (deposit-wallet registry gate, neg-risk approvals, CTF operator approval) is reimplemented here —
-// only invoked + parsed. See this plan's header discrepancy table (D1/D2/D6/D8) for what differs
-// from the spec's original assumption and why.
+// only invoked + parsed. See this repo's build notes for the full discrepancy table (D1/D2/D6/D8) of
+// what differs from a naive from-scratch assumption and why.
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -92,7 +92,7 @@ export function parseRedeemOutput(stdout) {
  * SDK-resolved deposit wallet address for `evmPrivateKey` (spec §8 — never guessed/hardcoded here;
  * D6(a)). Each returned row's `line` object is the raw {earn_usdc,cost_usdc,...} fact the caller
  * (core/loop.mjs) hands to core/ledger.mjs::appendLedger() — this wrapper does not write the ledger
- * itself (D6(d) — redeem.py no longer calls anicca's external record.mjs either).
+ * itself (D6(d) — redeem.py no longer calls any external record-writer script either).
  */
 export async function redeem({ evmPrivateKey, depositWallet, relayerCacheFile, env = process.env }) {
   const { stdout } = await execFileAsync(pythonBin(), [path.join(PY_DIR, 'redeem.py')], {

@@ -1,7 +1,8 @@
-// ~/vineyard/engines/lib/cost-basis.mjs — copied from anicca ~/anicca/skills/earn/lib/cost-basis.mjs,
+// ~/vineyard/engines/lib/cost-basis.mjs — ported from a proven reference cost-basis.mjs implementation,
 // adapted ONLY so every function takes an explicit `filePath` instead of one hardcoded shared-HOME
-// path (Vineyard runs N instances under one VINEYARD_HOME; anicca assumed one shared HOME per agent).
-// The venue-basis bookkeeping logic itself (deposit/withdraw/floor-at-0/seed-if-empty) is unchanged.
+// path (Vineyard runs N instances under one VINEYARD_HOME; the reference implementation assumed one
+// shared HOME per agent). The venue-basis bookkeeping logic itself (deposit/withdraw/floor-at-0/
+// seed-if-empty) is unchanged.
 // `applyDelta` is the PURE kernel (no I/O, no mutation) Phase 5's purity audit greps for
 // (verification-architecture.md's Purity Boundary Map) — `adjust` is the thin effectful wrapper
 // (read -> applyDelta -> write) around it.

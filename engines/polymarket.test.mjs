@@ -29,8 +29,8 @@ test('parseFundOutput: throws a clear error on empty stdout rather than returnin
 });
 
 // NOTE (deviation from the plan's original Task 9 fixture): the REAL, currently-live
-// engines/python/polymarket/place_order.py (adapted from anicca's already-adversary-fixed script,
-// v2_full_flow.py having since been deleted upstream — see the file's own docstring) emits
+// engines/python/polymarket/place_order.py (adapted from a proven reference implementation's
+// already-adversary-fixed script — see the file's own docstring) emits
 // {"token_id","amount","order_id","post_result","ok"} — NOT {wallet,side,max_price} as the plan's
 // stale snippet assumed. These fixtures match the real script's actual stdout shape.
 test('parseTradeOutput: real-shape fixture (single compact JSON line from place_order.py, success)', () => {

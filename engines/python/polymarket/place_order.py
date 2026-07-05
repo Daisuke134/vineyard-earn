@@ -2,24 +2,23 @@
 """
 place_order.py — EXECUTION: generalized V2 FAK order placement (#25 spec §2.2).
 
-Copied from the real, currently-live anicca skill (`~/anicca/skills/earn/polymarket-trade/
-place_order.py`, verified 2026-07-05) — NOT re-derived from `v2_full_flow.py` per this plan's
-original D1 text: that file has since been DELETED upstream (anicca's own #25 adversary fix #2,
-same day) and superseded by this already-parameterized, already-adversary-hardened script (SIWE mint
--> SecureClient bootstrap -> approve neg-risk spenders -> get_order_book -> create_market_order FAK
--> post_order), including the CLEAN-STDOUT GUARANTEE fix below (a real production bug: the SDK's own
+Ported from a real, proven-live reference implementation (verified 2026-07-05) — NOT re-derived from
+an earlier `v2_full_flow.py` prototype: that prototype hardcoded a fixed token_id/amount/`.env` path
+and was superseded by this already-parameterized, already-adversary-hardened script (SIWE mint ->
+SecureClient bootstrap -> approve neg-risk spenders -> get_order_book -> create_market_order FAK ->
+post_order), including the CLEAN-STDOUT GUARANTEE fix below (a real production bug: the SDK's own
 stdout prints were merging onto the result line and breaking the caller's json.loads()). Reusing this
 verified, already-fixed version rather than re-introducing that known bug is the "make sure it
 actually works" call per HARD RULE 0.24/HONESTY RULES — see this repo's plan-deviation note in the
 Task 9 commit message.
 
-ONE deliberate edit vs the anicca original: the `PM_TRADE_AGENT_HOME`/`load_dotenv(...)` block that
-loaded a hardcoded, anicca-specific `.env` path is removed — Vineyard's wrapper
-(`engines/polymarket.mjs`) always injects `POLYGON_WALLET_PRIVATE_KEY`/`TOKEN_ID`/`SIDE`/`AMOUNT`/
-`MAX_BET_SIZE` directly into this process's own env (per-instance, from `core/wallet.mjs`), so there is
-no separate dotenv file to load — the same principle as D6(b)'s edit to `redeem.py`. Every other line
-(SIWE mint, approvals, order-book read, FAK order placement, the stdout-redirect mechanism) is
-byte-identical to the anicca original.
+ONE deliberate edit vs the reference version: the previous implementation's own-agent-home/
+`load_dotenv(...)` block that loaded a hardcoded, project-specific `.env` path is removed —
+Vineyard's wrapper (`engines/polymarket.mjs`) always injects `POLYGON_WALLET_PRIVATE_KEY`/`TOKEN_ID`/
+`SIDE`/`AMOUNT`/`MAX_BET_SIZE` directly into this process's own env (per-instance, from
+`core/wallet.mjs`), so there is no separate dotenv file to load — the same principle as D6(b)'s edit
+to `redeem.py`. Every other line (SIWE mint, approvals, order-book read, FAK order placement, the
+stdout-redirect mechanism) is byte-identical to the reference version.
 
 WHICH market/side/amount is entirely the caller's (Vineyard operator's / `vineyard trade`'s) decision —
 this file only executes it and enforces the money-safety cap.

@@ -2,9 +2,10 @@
 // TOOL, not a strategy — hl.py's own docstring: "YOU are an intelligence; you decide"). This wrapper
 // NEVER picks side/size/coin — it only exposes hl.py's 4 primitives (account/market/open/close) as
 // async functions, and ALWAYS injects the resolved per-instance key as BLOCKRUN_WALLET_KEY (D7 — this
-// bypasses hl.py's own internal resolve-identity.mjs subprocess fallback, which assumes anicca's
-// directory layout and would not resolve correctly inside vineyard/; hl.py's env-first branch always
-// short-circuits before reaching that fallback once BLOCKRUN_WALLET_KEY is set).
+// bypasses hl.py's own internal resolve-identity.mjs subprocess fallback, which assumes a different,
+// unrelated project's directory layout and would not resolve correctly inside vineyard/; hl.py's
+// env-first branch always short-circuits before reaching that fallback once BLOCKRUN_WALLET_KEY is
+// set).
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
