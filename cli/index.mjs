@@ -57,6 +57,11 @@ async function cmdList() {
   console.log(JSON.stringify(readRegistry(), null, 2));
 }
 
+// Commands that are designed (spec §4) but not yet implemented in this repo — listed explicitly so
+// `vineyard fund` gives an honest "not implemented yet" message instead of being silently
+// indistinguishable from a typo'd/unknown command.
+const NOT_YET_IMPLEMENTED = ['fund', 'run', 'status', 'trade', 'redeem', 'dashboard'];
+
 async function main() {
   switch (cmd) {
     case 'spawn':
@@ -66,7 +71,11 @@ async function main() {
       await cmdList();
       break;
     default:
-      console.error('usage: vineyard <spawn|fund|run|status|list|trade|redeem|dashboard> [...args]');
+      if (NOT_YET_IMPLEMENTED.includes(cmd)) {
+        console.error(`vineyard ${cmd}: not implemented yet (see README "What's real today")`);
+      } else {
+        console.error('usage: vineyard <spawn|list> [...args]  (fund|run|status|trade|redeem|dashboard: not yet implemented)');
+      }
       process.exitCode = 2;
   }
 }
