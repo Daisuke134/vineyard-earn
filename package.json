@@ -11,7 +11,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test core/*.test.mjs engines/*.test.mjs",
+    "test": "node --test core/*.test.mjs engines/*.test.mjs api/*.test.mjs",
     "api": "node api/server.mjs"
   },
   "dependencies": {

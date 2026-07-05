@@ -1,8 +1,18 @@
 // ~/vineyard/api/server.mjs — Express REST, same verbs as the CLI (spec §4).
 import express from 'express';
 import crypto from 'node:crypto';
-import { generateWallet, isValidId } from '../core/wallet.mjs';
-import { registerSpawn, readRegistry, findSpawn } from '../core/registry.mjs';
+import path from 'node:path';
+import { generateWallet, isValidId, resolveEvmPrivateKey } from '../core/wallet.mjs';
+import { registerSpawn, readRegistry, findSpawn, updateSpawn } from '../core/registry.mjs';
+import { runOnce } from '../core/loop.mjs';
+import { readLedger, realizedPnl } from '../core/ledger.mjs';
+import * as yieldEngine from '../engines/yield.mjs';
+import * as polymarketEngine from '../engines/polymarket.mjs';
+import * as hyperliquidEngine from '../engines/hyperliquid.mjs';
+import * as solanaEngine from '../engines/solana.mjs';
+
+const ENGINES = { yield: yieldEngine, solana: solanaEngine, polymarket: polymarketEngine };
+const DATA_DIR = process.env.VINEYARD_DATA_DIR || path.resolve('data');
 
 const app = express();
 app.use(express.json());
@@ -65,6 +75,61 @@ app.get('/status/:id', requireValidId, (req, res) => {
   const row = findSpawn(req.params.id);
   if (!row) return res.status(404).json({ error: 'unknown id' });
   res.json(row);
+});
+
+// requireApiKey gates ONLY /fund, /trade, /redeem — the real money-moving verbs (REQ-020/FIND-006).
+// /run and /status/:id/full stay unauthenticated by the same deliberate ease-of-onboarding scope as
+// /spawn/list/status (REQ-020) — /run only invokes the read-only-safe automatic engines (yield/
+// solana/polymarket-redeem, never a hardcoded trade side/size), and /status/:id/full only reads.
+app.post('/fund', requireApiKey, requireValidId, async (req, res) => {
+  const { id, amount, sourceKey } = req.body || {};
+  const pk = resolveEvmPrivateKey(id);
+  if (!pk) return res.status(404).json({ error: `no wallet for id ${id}` });
+  const result = await polymarketEngine.fund({ evmPrivateKey: pk, sourceKey, fundUsd: Number(amount || 2) });
+  // D8: registering the deposit wallet here is what lets a later POST /redeem (and core/loop.mjs's
+  // polymarket-redeem branch) find it via findSpawn(id).polymarketDepositWallet.
+  if (result.registered) updateSpawn(id, { polymarketDepositWallet: result.deposit_wallet });
+  res.json(result);
+});
+
+app.post('/run', requireValidId, async (req, res) => {
+  const { id, engine } = req.body || {};
+  const line = await runOnce({ id, dataDir: DATA_DIR, engines: ENGINES, candidates: engine ? [engine] : undefined });
+  res.json(line);
+});
+
+app.get('/status/:id/full', requireValidId, (req, res) => {
+  const spawn = findSpawn(req.params.id);
+  if (!spawn) return res.status(404).json({ error: 'unknown id' });
+  res.json({ ...spawn, realized_pnl_usdc: realizedPnl(req.params.id, DATA_DIR), ledger: readLedger(req.params.id, DATA_DIR) });
+});
+
+app.post('/trade', requireApiKey, requireValidId, async (req, res) => {
+  // WHICH market/side/size to trade is the caller's decision (a human operator or an LLM agent
+  // reading this API's own contract), NEVER hardcoded here — per building-effective-ai-agents.md and
+  // hl.py's own philosophy ("You are an intelligence; you decide"). This route only executes.
+  const { id, engine, ...params } = req.body || {};
+  const pk = resolveEvmPrivateKey(id);
+  if (!pk) return res.status(404).json({ error: `no wallet for id ${id}` });
+  let result;
+  if (engine === 'hl') {
+    result = await hyperliquidEngine.open({ ...params, evmPrivateKey: pk });
+  } else if (engine === 'pm') {
+    result = await polymarketEngine.trade({ evmPrivateKey: pk, tokenId: params.tokenId, side: params.side, amountUsd: params.amountUsd, maxPrice: params.maxPrice });
+  } else {
+    return res.status(400).json({ error: 'engine must be hl or pm' });
+  }
+  res.json(result);
+});
+
+app.post('/redeem', requireApiKey, requireValidId, async (req, res) => {
+  const { id } = req.body || {};
+  const spawn = findSpawn(id);
+  const pk = resolveEvmPrivateKey(id);
+  if (!pk) return res.status(404).json({ error: `no wallet for id ${id}` });
+  if (!spawn?.polymarketDepositWallet) return res.status(404).json({ error: `no known Polymarket deposit wallet for id ${id} — call POST /fund first` });
+  const result = await polymarketEngine.redeem({ evmPrivateKey: pk, depositWallet: spawn.polymarketDepositWallet });
+  res.json(result);
 });
 
 const PORT = process.env.PORT || 3000;

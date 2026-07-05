@@ -1,5 +1,7 @@
 node_modules/
 engines/python/.venv/
+__pycache__/
+*.pyc
 data/instances/
 data/ledgers/*.jsonl
 data/spawns.json

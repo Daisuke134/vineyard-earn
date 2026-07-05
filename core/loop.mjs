@@ -41,7 +41,18 @@ function normalizeResult(result) {
     const net_usdc = result.reduce((s, r) => s + Number(r.line?.earn_usdc || 0) - Number(r.line?.cost_usdc || 0), 0);
     return { status: result.length ? 'ok' : 'wait', tx: result.map((r) => r.tx_hash).filter(Boolean), net_usdc, raw: result };
   }
-  return { status: result.status || result.action || (result.error ? 'error' : 'ok'), ...result };
+  // Honest-bookkeeping fix (found via a real end-to-end smoke test, not in the plan's original
+  // snippet): the plan's `result.status || result.action || (result.error ? 'error' : 'ok')` fell
+  // through to 'ok' for engines/yield.mjs's `{abort:"no ETH for gas",...}` shape (no status/action/
+  // error field) and for engines/solana.mjs's `{exit,note}` shape on a nonzero exit code — both would
+  // have been silently recorded as a successful pass in the ledger, exactly the fabricated-success
+  // HARD RULE 0.24 forbids. `abort`/a nonzero `exit` are now checked BEFORE falling through to 'ok'.
+  if (result.status) return result;
+  if (result.abort) return { status: 'abort', ...result };
+  if (typeof result.exit === 'number' && result.exit !== 0) return { status: 'error', ...result };
+  if (result.action) return { status: result.action, ...result };
+  if (result.error) return { status: 'error', ...result };
+  return { status: 'ok', ...result };
 }
 
 export async function runLoop({ id, dataDir, intervalMs, env = process.env, engines, candidates, signal }) {
