@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import { generateWallet, instanceDir, vineyardHome } from './wallet.mjs';
+import { generateWallet, instanceDir, vineyardHome, isValidId } from './wallet.mjs';
 
 function tmpHome(prefix) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), `${prefix}-`));
@@ -152,3 +152,34 @@ function privateKeyToAccountAddress(pk) {
   // not just trust wallet.mjs's own bookkeeping.
   return privateKeyToAccount(pk).address;
 }
+
+// --- isValidId / instanceDir: path-traversal / arbitrary-file-write guard (REQ-019, FIND-005) ---
+
+test('isValidId: rejects path-traversal and other unsafe id shapes', () => {
+  assert.equal(isValidId('../etc'), false);
+  assert.equal(isValidId('a/b'), false);
+  assert.equal(isValidId('.'), false);
+  assert.equal(isValidId('..'), false);
+  assert.equal(isValidId(''), false);
+  assert.equal(isValidId('a'.repeat(65)), false, '65 chars exceeds the 64-char cap');
+  assert.equal(isValidId('-leading-dash'), false);
+  assert.equal(isValidId('_leading-underscore'), false);
+  assert.equal(isValidId('has/slash'), false);
+  assert.equal(isValidId('has\\backslash'), false);
+  assert.equal(isValidId('has\0null'), false);
+});
+
+test("isValidId: accepts safe ids, including the real newId() shape (crypto.randomBytes(4).toString('hex'))", () => {
+  assert.equal(isValidId('alpha'), true);
+  assert.equal(isValidId('instance-a'), true);
+  assert.equal(isValidId('a1b2c3d4'), true);
+  assert.equal(isValidId('a_b-c9'), true);
+});
+
+test('instanceDir: throws for a path-traversal id BEFORE any filesystem access — nothing is created at the unsafe resolved path', () => {
+  const home = tmpHome('vy-traversal');
+  const env = { VINEYARD_HOME: home };
+  const unsafeResolved = path.join(home, 'instances', '../../tmp/evil');
+  assert.throws(() => instanceDir('../../tmp/evil', env), /invalid instance id/);
+  assert.equal(fs.existsSync(unsafeResolved), false, 'instanceDir must throw before ever touching the filesystem');
+});

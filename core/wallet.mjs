@@ -19,7 +19,22 @@ export function vineyardHome(env = process.env) {
   return env.VINEYARD_HOME || path.join(env.HOME || process.cwd(), '.vineyard');
 }
 
+// SECURITY (REQ-019): `id` is fully caller-controlled (CLI --id, POST /spawn {id}) and is used
+// directly as a filesystem path segment below — an unvalidated id like "../../etc" would let
+// instanceDir() resolve OUTSIDE <VINEYARD_HOME>/instances/, an arbitrary-file-write vector. This is
+// the ONE choke point every function in this file that builds a per-id path (generateWallet,
+// resolveEvmPrivateKey, resolveSolanaSecret, resolveAddresses) already routes through, so validating
+// here protects all of them without needing to remember to validate at every call site.
+export const ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
+export function isValidId(id) {
+  return typeof id === 'string' && ID_PATTERN.test(id);
+}
+
 export function instanceDir(id, env = process.env) {
+  if (!isValidId(id)) {
+    throw new Error(`invalid instance id: ${JSON.stringify(id)}`);
+  }
   return path.join(vineyardHome(env), 'instances', id);
 }
 
